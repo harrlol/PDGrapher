@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 
-from PDGrapher import Dataset, PDGrapher, Trainer
+from pdgrapher import Dataset, PDGrapher, Trainer
 
 import os
 torch.set_num_threads(5)
