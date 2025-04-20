@@ -116,6 +116,9 @@ class GCNBase(nn.Module):
         # is an edge incoming to it (excluding self loops)
         self.build_dictionary_node_to_edge_index_position()
 
+        #@harry: modify to accomodate for creating x_j_mask_out
+        self.build_dictionary_SRC_node_to_edge_index_position()
+
         self._mutilate_graph = True
 
     def forward(self, x):
@@ -138,13 +141,34 @@ class GCNBase(nn.Module):
         x_j_mask = torch.cat(x_j_mask)
         return x_j_mask
 
-    def from_node_to_out(self, x1, x2, batch, random_dims, x_j_mask=None):
+    #@harry: modify to accomodate for creating x_j_mask_out
+    def mutilate_graph_SRC(self, batch, uprime=0, mutilate_mutations=None):
+        if mutilate_mutations is not None:
+            uprime = mutilate_mutations + uprime
+        # buildsx_j_mask sequentially for each sample in the batch
+        x_j_mask_out = []
+        for i in range(len(torch.unique(batch))):
+            x_j_mask_ind = torch.ones(self.edge_index.size(1), dtype=torch.float, device=self.edge_index.device)
+            # Get nodes to intervene on in each batch
+            to_intervene_on = torch.where(uprime[batch == i])[0] # - (i * (torch.max(edge_index).item() + 1)) #the subtraction is to correct for gene indices in batche ind > 1
+
+            for node in to_intervene_on:
+                mask = self.dictionary_SRC_node_to_edge_index_position[node.item()]
+                x_j_mask_ind[mask] = 0
+            x_j_mask_out.append(x_j_mask_ind)
+        x_j_mask_out = torch.cat(x_j_mask_out)
+        return x_j_mask_out
+
+    def from_node_to_out(self, x1, x2, batch, random_dims, x_j_mask=None, x_j_mask_out=None):
         # Initial node embedding
         x = torch.cat([x1, x2, random_dims], 1)
 
         # Convs
+        #@harry: pass in x_j_mask_out to conv
         for conv, bn in zip(self.convs, self.bns):
-            x = F.elu(conv(x, self.edge_index, x_j_mask=x_j_mask, batch_size=len(torch.unique(batch))))
+            x = F.elu(conv(x, self.edge_index, x_j_mask=x_j_mask, 
+                           x_j_mask_out=x_j_mask_out,
+                           batch_size=len(torch.unique(batch))))
             x = torch.cat([x1, x2, x], 1)
             x = bn(x)
 
@@ -166,6 +190,19 @@ class GCNBase(nn.Module):
             if node == self.edge_index[0, i].item():
                 continue
             self.dictionary_node_to_edge_index_position[node].append(i)
+
+    #@harry: modify to accomodate for creating x_j_mask_out
+    def build_dictionary_SRC_node_to_edge_index_position(self):
+        # same function as above, except this will store the indices of 
+        # the edges whose source node is perturbed, this will then
+        # be passed to have our conv train a separate nn.Linear for
+        # messages that goes out of the perturbed node
+        self.dictionary_SRC_node_to_edge_index_position = defaultdict(list)
+        for i in range(self.edge_index.size(1)):
+            node = self.edge_index[0, i].item()
+            if node == self.edge_index[1, i].item():
+                continue
+            self.dictionary_SRC_node_to_edge_index_position[node].append(i)
 
 
 class ResponsePredictionModel(GCNBase):
@@ -211,10 +248,13 @@ class ResponsePredictionModel(GCNBase):
             uprime = x[:, 1].clone()
 
         x_j_mask = None
+        x_j_mask_out = None
         if self._mutilate_graph:
             x_j_mask = self.mutilate_graph(batch, uprime, mutilate_mutations)
+            #@harry: creating x_j_mask_out, pass to from_node_to_out
+            x_j_mask_out = self.mutilate_graph_SRC(batch, uprime, mutilate_mutations)
 
-        x = self.from_node_to_out(x_ge, x_pert, batch, random_dims, x_j_mask)
+        x = self.from_node_to_out(x_ge, x_pert, batch, random_dims, x_j_mask, x_j_mask_out)
 
         return x, in_x_binarized
 
@@ -260,10 +300,13 @@ class PerturbationDiscoveryModel(GCNBase):
         x_treated, _ = self.embed_layer_treated(x[:, 1].view(-1, 1), topK=None, binarize_input=True, threshold_input=threshold_input["treated"])
 
         x_j_mask = None
+        x_j_mask_out = None
+        #@harry: creating x_j_mask_out, pass to from_node_to_out
         if self._mutilate_graph:
             x_j_mask = self.mutilate_graph(batch, mutilate_mutations=mutilate_mutations)
+            x_j_mask_out = self.mutilate_graph_SRC(batch, mutilate_mutations=mutilate_mutations)
 
-        x = self.from_node_to_out(x_diseased, x_treated, batch, random_dims, x_j_mask)
+        x = self.from_node_to_out(x_diseased, x_treated, batch, random_dims, x_j_mask, x_j_mask_out)
 
         return x
 

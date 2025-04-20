@@ -173,10 +173,12 @@ class GCNConv(MessagePassing):
 
 
     #@guada: modified to add batch_size and x_j_mask
+    #@harry: modified to add x_j_mask_out
     def forward(self, x: Tensor, edge_index: Adj,
                 edge_weight: OptTensor = None,
                 batch_size: int = None,
-                x_j_mask: Tensor = None) -> Tensor:
+                x_j_mask: Tensor = None,
+                x_j_mask_out: Tensor = None) -> Tensor:
         """@guada:added batch_size to use in gcn_norm, added x_j_mask to use in message"""
         if self.normalize:
             if isinstance(edge_index, Tensor):
@@ -204,14 +206,15 @@ class GCNConv(MessagePassing):
         x_regular = self.lin(x)
         x_perturbed = self.lin_j_out(x) #@harry: also apply lin_j_out to x
 
-        #@harry store both for later use
-        self.x_regular = x_regular
-        self.x_perturbed = x_perturbed
-
-
+        #@harry transform x according to x_j_mask_out
+        x_transformed = torch.where(
+            x_j_mask_out.unsqueeze(-1),
+            x_regular,
+            x_perturbed     #@harry: mask is 0 here, 0 is source = perturbed, so we use x_perturbed
+        )
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
-        out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
+        out = self.propagate(edge_index, x=x_transformed, edge_weight=edge_weight,
                              size=None, batch_size=batch_size, x_j_mask = x_j_mask)
 
         if self.bias is not None:
