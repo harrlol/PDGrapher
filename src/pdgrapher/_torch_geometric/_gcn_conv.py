@@ -166,6 +166,7 @@ class GCNConv(MessagePassing):
 
     def reset_parameters(self):
         self.lin.reset_parameters()
+        self.lin_j_out.reset_parameters() #@harry: added
         zeros(self.bias)
         self._cached_edge_index = None
         self._cached_adj_t = None
@@ -200,7 +201,14 @@ class GCNConv(MessagePassing):
                 else:
                     edge_index = cache
 
-        x = self.lin(x)
+        x_regular = self.lin(x)
+        x_perturbed = self.lin_j_out(x) #@harry: also apply lin_j_out to x
+
+        #@harry store both for later use
+        self.x_regular = x_regular
+        self.x_perturbed = x_perturbed
+
+
 
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
         out = self.propagate(edge_index, x=x, edge_weight=edge_weight,
