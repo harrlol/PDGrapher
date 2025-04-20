@@ -168,7 +168,6 @@ class GCNBase(nn.Module):
             self.dictionary_node_to_edge_index_position[node].append(i)
 
 
-
 class ResponsePredictionModel(GCNBase):
     """
     Class that represents Response Prediction model.
@@ -197,12 +196,10 @@ class ResponsePredictionModel(GCNBase):
 
 
     def _get_embeddings(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
-    
 
         # Positional encodings
         pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
         random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
-
 
         # Feature embedding
         x_ge, _ = self.embed_layer_ge(x[:, 0].view(-1, 1), topK=None, binarize_intervention=False, binarize_input=True, threshold_input=threshold_input)
