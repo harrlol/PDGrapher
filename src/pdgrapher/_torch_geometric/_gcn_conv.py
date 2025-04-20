@@ -152,6 +152,10 @@ class GCNConv(MessagePassing):
 
         self.lin = Linear(in_channels, out_channels, bias=False,
                           weight_initializer='glorot')
+        
+        #@harry: added lin_j_out to train separate weights for message out of x_j
+        self.lin_j_out = Linear(in_channels, out_channels, bias=False,
+                          weight_initializer='glorot')
 
         if bias:
             self.bias = Parameter(torch.Tensor(out_channels))
