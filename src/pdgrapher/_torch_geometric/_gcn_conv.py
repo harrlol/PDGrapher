@@ -10,6 +10,7 @@ from torch.nn import Parameter
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor, fill_diag, matmul, mul
 from torch_sparse import sum as sparsesum
+import faulthandler; faulthandler.enable()
 
 from torch_geometric.nn.dense.linear import Linear
 from torch_geometric.nn.inits import zeros
@@ -206,26 +207,30 @@ class GCNConv(MessagePassing):
         x_regular = self.lin(x)
         x_perturbed = self.lin_j_out(x) #@harry: also apply lin_j_out to x
 
-        #@harry transform x according to x_j_mask_out
-        x_transformed = torch.where(
-            x_j_mask_out.unsqueeze(-1),
-            x_regular,
-            x_perturbed     #@harry: mask is 0 here, 0 is source = perturbed, so we use x_perturbed
-        )
-
+        #@harry: pass in both x_perturbed and x_regular to propagate
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
-        out = self.propagate(edge_index, x=x_transformed, edge_weight=edge_weight,
-                             size=None, batch_size=batch_size, x_j_mask = x_j_mask)
+        out = self.propagate(edge_index, x_regular=x_regular, x_perturbed=x_perturbed, edge_weight=edge_weight,
+                             size=None, batch_size=batch_size, x_j_mask = x_j_mask, x_j_mask_out = x_j_mask_out)
 
         if self.bias is not None:
             out += self.bias
 
         return out
 
-
-    def message(self, x_j: Tensor, edge_weight: OptTensor, x_j_mask: Tensor) -> Tensor:
+    #@harry: both x_regular and x_perturbed are passed into message, 
+    #and x_j_mask_out is used to determine which nodes to use x_perturbed for
+    def message(self, x_regular_j: Tensor, x_perturbed_j: Tensor, edge_weight: OptTensor, x_j_mask: Tensor, x_j_mask_out: Tensor) -> Tensor:
         #@guada: added x_j_mask to perform mutilation: x_j_mask[i] == 0 for incoming edges into mutilated nodes (except self-loops)
-        feat_dim = x_j.size(-1)
+        feat_dim = x_regular_j.size(-1)
+        
+        x_j_mask_out = x_j_mask_out.bool()
+        #@harry transform x according to x_j_mask_out
+        x_j = torch.where(
+            x_j_mask_out,
+            x_perturbed_j,
+            x_regular_j       
+        )
+
         if edge_weight is None:
             if x_j_mask is None:
                 out = x_j

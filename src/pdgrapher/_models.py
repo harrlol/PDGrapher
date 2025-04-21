@@ -148,15 +148,16 @@ class GCNBase(nn.Module):
         # buildsx_j_mask sequentially for each sample in the batch
         x_j_mask_out = []
         for i in range(len(torch.unique(batch))):
-            x_j_mask_ind = torch.ones(self.edge_index.size(1), dtype=torch.float, device=self.edge_index.device)
+            x_j_mask_ind = torch.zeros(self.edge_index.size(1), dtype=torch.bool, device=self.edge_index.device)    #@harry: debug "expect bool got float"
             # Get nodes to intervene on in each batch
             to_intervene_on = torch.where(uprime[batch == i])[0] # - (i * (torch.max(edge_index).item() + 1)) #the subtraction is to correct for gene indices in batche ind > 1
 
             for node in to_intervene_on:
                 mask = self.dictionary_SRC_node_to_edge_index_position[node.item()]
-                x_j_mask_ind[mask] = 0
+                x_j_mask_ind[mask] = True
             x_j_mask_out.append(x_j_mask_ind)
         x_j_mask_out = torch.cat(x_j_mask_out)
+        x_j_mask_out = x_j_mask_out.unsqueeze(-1)
         return x_j_mask_out
 
     def from_node_to_out(self, x1, x2, batch, random_dims, x_j_mask=None, x_j_mask_out=None):
@@ -166,9 +167,7 @@ class GCNBase(nn.Module):
         # Convs
         #@harry: pass in x_j_mask_out to conv
         for conv, bn in zip(self.convs, self.bns):
-            x = F.elu(conv(x, self.edge_index, x_j_mask=x_j_mask, 
-                           x_j_mask_out=x_j_mask_out,
-                           batch_size=len(torch.unique(batch))))
+            x = F.elu(conv(x, self.edge_index, x_j_mask=x_j_mask, x_j_mask_out=x_j_mask_out, batch_size=len(torch.unique(batch))))
             x = torch.cat([x1, x2, x], 1)
             x = bn(x)
 

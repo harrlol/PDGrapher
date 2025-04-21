@@ -195,7 +195,8 @@ class MessagePassing(torch.nn.Module):
     #@guada: modified this function to build messages for each sample using a single edge_index
     #specifically, added the batch_size arg and passed it to __lift__
     #also added x_j_mask here to pass to message()
-    def __collect__(self, args, edge_index, size, batch_size, x_j_mask, kwargs):
+    #@harry: modified to also accept x_j_mask_out to be used in message()
+    def __collect__(self, args, edge_index, size, batch_size, x_j_mask, x_j_mask_out, kwargs):
         i, j = (1, 0) if self.flow == 'source_to_target' else (0, 1)
 
         out = {}
@@ -244,13 +245,15 @@ class MessagePassing(torch.nn.Module):
         out['dim_size'] = out['size_i']
         out['batch_size'] = batch_size  #@guada: added batch_size to be used in aggregate function
         out['x_j_mask'] = x_j_mask      #@guada: added x_j_mask to be used in message function
+        out['x_j_mask_out'] = x_j_mask_out #@harry: added x_j_mask_out to be used in message function
 
         return out
 
     #@guada: modified this function to enable MP with a single edge_index for all samples
     #specifically, added batch_size to function
     #@guada: also modified to accept x_j_mask to be used in message()
-    def propagate(self, edge_index: Adj, size: Size = None, batch_size: int = None, x_j_mask: Tensor = None, **kwargs):
+    #@harry: modified to also accept x_j_mask_out to be used in message()
+    def propagate(self, edge_index: Adj, size: Size = None, batch_size: int = None, x_j_mask: Tensor = None, x_j_mask_out: Tensor = None, **kwargs):
         r"""The initial call to start propagating messages.
 
         Args:
@@ -294,7 +297,7 @@ class MessagePassing(torch.nn.Module):
         if (isinstance(edge_index, SparseTensor) and self.fuse
                 and not self._explain):
             coll_dict = self.__collect__(self.__fused_user_args__, edge_index,
-                                         size, batch_size, x_j_mask, kwargs)  #@guada: pass here batch_size and x_j_mask
+                                         size, batch_size, x_j_mask, x_j_mask_out, kwargs)  #@guada: pass here batch_size and x_j_mask #@harry: pass in x_j_mask_out
 
             msg_aggr_kwargs = self.inspector.distribute(
                 'message_and_aggregate', coll_dict)
@@ -328,7 +331,7 @@ class MessagePassing(torch.nn.Module):
                         kwargs[arg] = decomp_kwargs[arg][i]
                 
                 coll_dict = self.__collect__(self.__user_args__, edge_index,
-                                             size, batch_size, x_j_mask, kwargs) #@guada: pass here batch_size and x_j_mask
+                                             size, batch_size, x_j_mask, x_j_mask_out, kwargs) #@guada: pass here batch_size and x_j_mask #@harry: pass in x_j_mask_out
 
                 msg_kwargs = self.inspector.distribute('message', coll_dict)
                 for hook in self._message_forward_pre_hooks.values():
