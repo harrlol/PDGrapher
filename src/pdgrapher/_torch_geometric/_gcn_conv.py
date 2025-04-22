@@ -206,6 +206,7 @@ class GCNConv(MessagePassing):
 
         x_regular = self.lin(x)
         x_perturbed = self.lin_j_out(x) #@harry: also apply lin_j_out to x
+        # x[index] here essentially just pull the indices perturbed
 
         #@harry: pass in both x_perturbed and x_regular to propagate
         # propagate_type: (x: Tensor, edge_weight: OptTensor)
