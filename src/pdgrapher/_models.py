@@ -179,10 +179,13 @@ class ResponsePredictionModel(GCNBase):
         self.num_nodes = args.num_vars
         self.embed_layer_pert = EmbedLayer(args.num_vars, num_features=1, num_categs=2, hidden_dim=args.embedding_layer_dim)
         self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
-        
+    
+        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+
         #@harry: modified to use precomputed embeddings
-        self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
-        nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+        self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
+        self.positional_embeddings = self.adapt_esm(precomputed_embeddings)
 
 
     def forward(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
@@ -234,11 +237,8 @@ class PerturbationDiscoveryModel(GCNBase):
         self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
         
         #@harry: modified to use precomputed embeddings
-        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
-        self.esm_embedding = nn.Parameter(torch.load("esm"))
-        self.adapt_esm_embed = nn.Linear(self.esm_embed.shape[1], self.positional_features_dims)
-
-        nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+        self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
+        self.positional_embeddings = self.adapt_esm(precomputed_embeddings)
 
     def forward(self, x, batch, topK=None, mutilate_mutations=None, threshold_input=None):
         '''
