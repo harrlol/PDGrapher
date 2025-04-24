@@ -203,8 +203,12 @@ class ResponsePredictionModel(GCNBase):
     def _get_embeddings(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
 
         # Positional encodings
-        pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
-        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        # pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
+        # random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+
+        #@harry: precomputed embedding is already lined up with node order
+        # and here our object is already a tensor
+        esm_embed_dims = self.positional_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
 
         # Feature embedding
         x_ge, _ = self.embed_layer_ge(x[:, 0].view(-1, 1), topK=None, binarize_intervention=False, binarize_input=True, threshold_input=threshold_input)
@@ -219,7 +223,7 @@ class ResponsePredictionModel(GCNBase):
         if self._mutilate_graph:
             x_j_mask = self.mutilate_graph(batch, uprime, mutilate_mutations)
 
-        x = self.from_node_to_out(x_ge, x_pert, batch, random_dims, x_j_mask)
+        x = self.from_node_to_out(x_ge, x_pert, batch, esm_embed_dims, x_j_mask)
 
         return x, in_x_binarized
 
@@ -259,11 +263,13 @@ class PerturbationDiscoveryModel(GCNBase):
         if self._mutilate_graph and mutilate_mutations is None:
             raise ValueError("Mutations should not be None in intervention discovery model")
 
-
         # Positional encodings
         # pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
-        pos_embeddings = self.adapt_esm_embed(self.esm_embed)
-        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)  # TODO: check what this is doing
+        # random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+
+        #@harry: precomputed embedding is already lined up with node order
+        # and here our object is already a tensor
+        esm_embed_dims = self.positional_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
 
 
         # Feature embedding
