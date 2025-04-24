@@ -173,12 +173,14 @@ class ResponsePredictionModel(GCNBase):
     Class that represents Response Prediction model.
     """
 
-    def __init__(self, args: GCNArgs, edge_index: torch.Tensor):
+    def __init__(self, args: GCNArgs, edge_index: torch.Tensor, precomputed_embeddings=None):
         super().__init__(args, "response", edge_index)
 
         self.num_nodes = args.num_vars
         self.embed_layer_pert = EmbedLayer(args.num_vars, num_features=1, num_categs=2, hidden_dim=args.embedding_layer_dim)
-        self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
+        self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim,
+                                         precomputed_embeddings=precomputed_embeddings)
+        #@harry: modified to use precomputed embeddings
         self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
         nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
 
@@ -224,12 +226,15 @@ class PerturbationDiscoveryModel(GCNBase):
     Class that represents Perturbation Discovery model.
     """
 
-    def __init__(self, args: GCNArgs, edge_index: torch.Tensor):
+    def __init__(self, args: GCNArgs, edge_index: torch.Tensor, precomputed_embeddings=None):
         super().__init__(args, "perturbation", edge_index)
         
         self.num_nodes = args.num_vars
-        self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
-        self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
+        self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim,
+                                                precomputed_embeddings=precomputed_embeddings)
+        #@harry: modified to use precomputed embeddings
+        self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim, 
+                                                precomputed_embeddings=precomputed_embeddings)
         self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
         nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
 

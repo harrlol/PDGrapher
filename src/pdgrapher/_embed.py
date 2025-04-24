@@ -6,7 +6,7 @@ import torch.nn as nn
 
 class EmbedLayer(nn.Module):
 
-    def __init__(self, num_vars: int, num_features: int, num_categs: int, hidden_dim: int):
+    def __init__(self, num_vars: int, num_features: int, num_categs: int, hidden_dim: int, precomputed_embeddings=None):
         """
         Embedding layer to represent categorical inputs in continuous space.
 
@@ -27,8 +27,24 @@ class EmbedLayer(nn.Module):
         # Gene-wise 1/0 learnable embeddings
         # We have num_vars*num_categs*num_features possible embeddings to model. 
         self.num_embeds = self.num_vars*self.num_categs*self.num_features
-        self.embedding = nn.Embedding(num_embeddings=self.num_embeds, embedding_dim=self.hidden_dim)
-        self.embedding.weight.data.mul_(2./math.sqrt(self.num_vars))
+
+        #@harry: modified to use precomputed embeddings
+        if precomputed_embeddings is not None:
+            # #@harry: here we expect mismatch of embedding dimensions, so we do a simple linear transforma
+            embedding_dim = precomputed_embeddings.shape[1]
+            self.embedding_transform = nn.Linear(embedding_dim, hidden_dim)
+
+            full_table = torch.randn(self.num_embeds, embedding_dim)
+            #@harry: fill slot 0 of each gene with embedding
+            for i in range(num_vars):
+                full_table[i * num_categs] = precomputed_embeddings[i]
+
+            transformed = self.embedding_transform(full_table)
+            self.embedding = nn.Embedding.from_pretrained(transformed, freeze=False)
+        else:
+            self.embedding = nn.Embedding(num_embeddings=self.num_embeds, embedding_dim=self.hidden_dim)
+            self.embedding.weight.data.mul_(2. / math.sqrt(self.num_vars))
+
         self.bias = nn.Parameter(torch.zeros(self.num_vars, self.hidden_dim*self.num_features))
 
         # Tensor for mapping each input to its corresponding embedding range in self.embedding
@@ -60,11 +76,12 @@ class EmbedLayer(nn.Module):
             uprime = uprime.view(-1)
             x_bin = uprime.view(-1, 1)
         elif binarize_input:
-            difference = x - threshold_input.reshape(1, -1)
-            difference = torch.where(difference >= 0, difference.to(torch.double), torch.inf).float()
-            percentile = torch.argsort(difference)[:, 0]
-            percentile = torch.where(percentile != len(threshold_input)-1, percentile, len(threshold_input)-2)
-            x_bin = percentile.view(-1, 1)
+            # difference = x - threshold_input.reshape(1, -1)
+            # difference = torch.where(difference >= 0, difference.to(torch.double), torch.inf).float()
+            # percentile = torch.argsort(difference)[:, 0]
+            # percentile = torch.where(percentile != len(threshold_input)-1, percentile, len(threshold_input)-2)
+            # x_bin = percentile.view(-1, 1)
+            x_bin = torch.zeros_like(x, dtype=torch.long)  #@harry: experimenting with locking at slot 0 with embed
         else:
             x_bin = x
 

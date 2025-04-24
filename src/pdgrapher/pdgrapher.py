@@ -18,7 +18,8 @@ class PDGrapher:
     """
 
     def __init__(self, edge_index: torch.Tensor, *, model_kwargs: Dict[str, Any] = {},
-                 response_kwargs: Dict[str, Any] = {}, perturbation_kwargs: Dict[str, Any] = {}) -> None:
+                 response_kwargs: Dict[str, Any] = {}, perturbation_kwargs: Dict[str, Any] = {},
+                 precomputed_embeddings_path: Optional[str] = None) -> None:
         """
         Initialization for PDGrapher.
 
@@ -50,6 +51,11 @@ class PDGrapher:
         response_kwargs = {**model_kwargs, **response_kwargs}
         perturbation_kwargs = {**model_kwargs, **perturbation_kwargs}
 
+        #@harry: modified to use precomputed embeddings
+        precomputed_embeddings = None
+        if precomputed_embeddings_path:
+            precomputed_embeddings = torch.load(precomputed_embeddings_path)
+
         # Pop kwargs related to response_prediction and perturbation_discovery
         # modules
         self._train_response_prediction = response_kwargs.pop("train", True)
@@ -59,8 +65,9 @@ class PDGrapher:
         pd_args = GCNArgs.from_dict(perturbation_kwargs)
 
         # Models
-        self.response_prediction: nn.Module = ResponsePredictionModel(rp_args, edge_index)
-        self.perturbation_discovery: nn.Module = PerturbationDiscoveryModel(pd_args, edge_index)
+        #@harry: modified to use precomputed embeddings
+        self.response_prediction: nn.Module = ResponsePredictionModel(rp_args, edge_index, precomputed_embeddings)
+        self.perturbation_discovery: nn.Module = PerturbationDiscoveryModel(pd_args, edge_index, precomputed_embeddings)
 
         # Optimizers & Schedulers
         # we use __* to set these "private"
