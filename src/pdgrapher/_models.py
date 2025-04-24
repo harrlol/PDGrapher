@@ -178,8 +178,8 @@ class ResponsePredictionModel(GCNBase):
 
         self.num_nodes = args.num_vars
         self.embed_layer_pert = EmbedLayer(args.num_vars, num_features=1, num_categs=2, hidden_dim=args.embedding_layer_dim)
-        self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim,
-                                         precomputed_embeddings=precomputed_embeddings)
+        self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
+        
         #@harry: modified to use precomputed embeddings
         self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
         nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
@@ -230,15 +230,12 @@ class PerturbationDiscoveryModel(GCNBase):
         super().__init__(args, "perturbation", edge_index)
         
         self.num_nodes = args.num_vars
-        self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim,
-                                                precomputed_embeddings=precomputed_embeddings)
-        #@harry: modified to use precomputed embeddings
-        self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim, 
-                                                precomputed_embeddings=precomputed_embeddings)
+        self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
+        self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
         
+        #@harry: modified to use precomputed embeddings
         # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
-        self.esm_embed = nn.Parameter(torch.load("esm"))
-        # TODO: Somehow rearrange esm_embed to the same order as in node indices
+        self.esm_embedding = nn.Parameter(torch.load("esm"))
         self.adapt_esm_embed = nn.Linear(self.esm_embed.shape[1], self.positional_features_dims)
 
         nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
