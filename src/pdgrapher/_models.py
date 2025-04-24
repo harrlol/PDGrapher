@@ -184,8 +184,8 @@ class ResponsePredictionModel(GCNBase):
         # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
 
         #@harry: modified to use precomputed embeddings
+        self.raw_esm = nn.Parameter(precomputed_embeddings, requires_grad=False)
         self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
-        self.positional_embeddings = self.adapt_esm(precomputed_embeddings)
 
 
     def forward(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
@@ -208,7 +208,8 @@ class ResponsePredictionModel(GCNBase):
 
         #@harry: precomputed embedding is already lined up with node order
         # and here our object is already a tensor
-        esm_embed_dims = self.positional_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        adapted_esm = self.adapt_esm(self.raw_esm)
+        esm_embed_dims = adapted_esm.repeat(int(x.shape[0] / self.num_nodes), 1)
 
         # Feature embedding
         x_ge, _ = self.embed_layer_ge(x[:, 0].view(-1, 1), topK=None, binarize_intervention=False, binarize_input=True, threshold_input=threshold_input)
@@ -244,8 +245,8 @@ class PerturbationDiscoveryModel(GCNBase):
         # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
         
         #@harry: modified to use precomputed embeddings
+        self.raw_esm = nn.Parameter(precomputed_embeddings, requires_grad=False)
         self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
-        self.positional_embeddings = self.adapt_esm(precomputed_embeddings)
 
     def forward(self, x, batch, topK=None, mutilate_mutations=None, threshold_input=None):
         '''
@@ -269,7 +270,8 @@ class PerturbationDiscoveryModel(GCNBase):
 
         #@harry: precomputed embedding is already lined up with node order
         # and here our object is already a tensor
-        esm_embed_dims = self.positional_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        adapted_esm = self.adapt_esm(self.raw_esm)
+        esm_embed_dims = adapted_esm.repeat(int(x.shape[0] / self.num_nodes), 1)
 
 
         # Feature embedding
@@ -280,7 +282,7 @@ class PerturbationDiscoveryModel(GCNBase):
         if self._mutilate_graph:
             x_j_mask = self.mutilate_graph(batch, mutilate_mutations=mutilate_mutations)
 
-        x = self.from_node_to_out(x_diseased, x_treated, batch, random_dims, x_j_mask)
+        x = self.from_node_to_out(x_diseased, x_treated, batch, esm_embed_dims, x_j_mask)
 
         return x
 
