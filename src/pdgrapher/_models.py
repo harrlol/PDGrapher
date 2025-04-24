@@ -235,7 +235,12 @@ class PerturbationDiscoveryModel(GCNBase):
         #@harry: modified to use precomputed embeddings
         self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim, 
                                                 precomputed_embeddings=precomputed_embeddings)
-        self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        
+        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        self.esm_embed = nn.Parameter(torch.load("esm"))
+        # TODO: Somehow rearrange esm_embed to the same order as in node indices
+        self.adapt_esm_embed = nn.Linear(self.esm_embed.shape[1], self.positional_features_dims)
+
         nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
 
     def forward(self, x, batch, topK=None, mutilate_mutations=None, threshold_input=None):
@@ -256,8 +261,9 @@ class PerturbationDiscoveryModel(GCNBase):
 
 
         # Positional encodings
-        pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
-        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        # pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
+        pos_embeddings = self.adapt_esm_embed(self.esm_embed)
+        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)  # TODO: check what this is doing
 
 
         # Feature embedding
