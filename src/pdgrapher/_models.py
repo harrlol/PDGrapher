@@ -236,6 +236,9 @@ class PerturbationDiscoveryModel(GCNBase):
         self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
         self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
         
+        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+        
         #@harry: modified to use precomputed embeddings
         self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
         self.positional_embeddings = self.adapt_esm(precomputed_embeddings)
