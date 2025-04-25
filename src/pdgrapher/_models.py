@@ -209,14 +209,18 @@ class ResponsePredictionModel(GCNBase):
     Class that represents Response Prediction model.
     """
 
-    def __init__(self, args: GCNArgs, edge_index: torch.Tensor):
+    def __init__(self, args: GCNArgs, edge_index: torch.Tensor, precomputed_embeddings=None):
         super().__init__(args, "response", edge_index)
 
         self.num_nodes = args.num_vars
         self.embed_layer_pert = EmbedLayer(args.num_vars, num_features=1, num_categs=2, hidden_dim=args.embedding_layer_dim)
         self.embed_layer_ge = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
-        self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
-        nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+
+        #@harry: modified to use precomputed embeddings
+        self.raw_esm = nn.Parameter(precomputed_embeddings, requires_grad=False)
+        self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
 
 
     def forward(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
@@ -234,8 +238,12 @@ class ResponsePredictionModel(GCNBase):
     def _get_embeddings(self, x, batch, topK=None, binarize_intervention=False, mutilate_mutations=None, threshold_input=None):
 
         # Positional encodings
-        pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
-        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        # pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
+        # random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+
+        #@harry: precomputed embedding is already lined up with node order
+        adapted_esm = self.adapt_esm(self.raw_esm)
+        esm_embed_dims = adapted_esm.repeat(int(x.shape[0] / self.num_nodes), 1)
 
         # Feature embedding
         x_ge, _ = self.embed_layer_ge(x[:, 0].view(-1, 1), topK=None, binarize_intervention=False, binarize_input=True, threshold_input=threshold_input)
@@ -253,7 +261,7 @@ class ResponsePredictionModel(GCNBase):
             #@harry: creating x_j_mask_out, pass to from_node_to_out
             x_j_mask_out = self.mutilate_graph_SRC(batch, uprime, mutilate_mutations)
 
-        x = self.from_node_to_out(x_ge, x_pert, batch, random_dims, x_j_mask, x_j_mask_out)
+        x = self.from_node_to_out(x_ge, x_pert, batch, esm_embed_dims, x_j_mask, x_j_mask_out)
 
         return x, in_x_binarized
 
@@ -263,14 +271,18 @@ class PerturbationDiscoveryModel(GCNBase):
     Class that represents Perturbation Discovery model.
     """
 
-    def __init__(self, args: GCNArgs, edge_index: torch.Tensor):
+    def __init__(self, args: GCNArgs, edge_index: torch.Tensor, precomputed_embeddings=None):
         super().__init__(args, "perturbation", edge_index)
         
         self.num_nodes = args.num_vars
         self.embed_layer_diseased = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
         self.embed_layer_treated = EmbedLayer(args.num_vars, num_features=1, num_categs=500, hidden_dim=args.embedding_layer_dim)
-        self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
-        nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+        # self.positional_embeddings = nn.Embedding(args.num_vars, self.positional_features_dims)
+        # nn.init.normal_(self.positional_embeddings.weight, mean=0.0, std=1.0)
+
+        #@harry: modified to use precomputed embeddings
+        self.raw_esm = nn.Parameter(precomputed_embeddings, requires_grad=False)
+        self.adapt_esm = nn.Linear(precomputed_embeddings.shape[1], self.positional_features_dims)
 
     def forward(self, x, batch, topK=None, mutilate_mutations=None, threshold_input=None):
         '''
@@ -288,10 +300,14 @@ class PerturbationDiscoveryModel(GCNBase):
         if self._mutilate_graph and mutilate_mutations is None:
             raise ValueError("Mutations should not be None in intervention discovery model")
 
-
         # Positional encodings
-        pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
-        random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+        # pos_embeddings = self.positional_embeddings(torch.arange(self.num_nodes).to(x.device))
+        # random_dims = pos_embeddings.repeat(int(x.shape[0] / self.num_nodes), 1)
+
+        #@harry: precomputed embedding is already lined up with node order
+        # and here our object is already a tensor
+        adapted_esm = self.adapt_esm(self.raw_esm)
+        esm_embed_dims = adapted_esm.repeat(int(x.shape[0] / self.num_nodes), 1)
 
 
         # Feature embedding
@@ -305,7 +321,7 @@ class PerturbationDiscoveryModel(GCNBase):
             x_j_mask = self.mutilate_graph(batch, mutilate_mutations=mutilate_mutations)
             x_j_mask_out = self.mutilate_graph_SRC(batch, mutilate_mutations=mutilate_mutations)
 
-        x = self.from_node_to_out(x_diseased, x_treated, batch, random_dims, x_j_mask, x_j_mask_out)
+        x = self.from_node_to_out(x_diseased, x_treated, batch, esm_embed_dims, x_j_mask, x_j_mask_out)
 
         return x
 
